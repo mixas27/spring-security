@@ -22,10 +22,7 @@ import javax.sql.DataSource;
 
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
-import org.springframework.security.acls.domain.AccessControlEntryImpl;
-import org.springframework.security.acls.domain.GrantedAuthoritySid;
-import org.springframework.security.acls.domain.ObjectIdentityImpl;
-import org.springframework.security.acls.domain.PrincipalSid;
+import org.springframework.security.acls.domain.*;
 import org.springframework.security.acls.model.AccessControlEntry;
 import org.springframework.security.acls.model.Acl;
 import org.springframework.security.acls.model.AclCache;
@@ -68,18 +65,23 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
     private String sidIdentityQuery = "call identity()";
     private String insertClass = "insert into acl_class (class) values (?)";
     private String insertEntry = "insert into acl_entry "
-        + "(acl_object_identity, ace_order, sid, mask, granting, audit_success, audit_failure)"
-        + "values (?, ?, ?, ?, ?, ?, ?)";
+            + "(acl_object_identity, ace_order, sid, mask, granting, audit_success, audit_failure)"
+            + "values (?, ?, ?, ?, ?, ?, ?)";
     private String insertObjectIdentity = "insert into acl_object_identity "
-        + "(object_id_class, object_id_identity, owner_sid, entries_inheriting) " + "values (?, ?, ?, ?)";
+            + "(object_id_class, object_id_identity, owner_sid, entries_inheriting) " + "values (?, ?, ?, ?)";
     private String insertSid = "insert into acl_sid (principal, sid) values (?, ?)";
     private String selectClassPrimaryKey = "select id from acl_class where class=?";
     private String selectObjectIdentityPrimaryKey = "select acl_object_identity.id from acl_object_identity, acl_class "
-        + "where acl_object_identity.object_id_class = acl_class.id and acl_class.class=? "
-        + "and acl_object_identity.object_id_identity = ?";
+            + "where acl_object_identity.object_id_class = acl_class.id and acl_class.class=? "
+            + "and acl_object_identity.object_id_identity = ?";
     private String selectSidPrimaryKey = "select id from acl_sid where principal=? and sid=?";
     private String updateObjectIdentity = "update acl_object_identity set "
-        + "parent_object = ?, owner_sid = ?, entries_inheriting = ?" + " where id = ?";
+            + "parent_object = ?, owner_sid = ?, entries_inheriting = ?" + " where id = ?";
+    private String selectSidIdBySid = "select id from acl_sid where sid=?";
+    private String deleteSidByPK = "DELETE acl_sid WHERE id=?";
+    private String deleteEntryBySidForeignKey = "DELETE acl_entry ae WHERE ae.sid = as.id JOIN acl_sid as ON as.sid = ?";
+    private String updateObjectIdentityOwnerBySid = "UPDATE acl_object_identity SET owner_sid=?  WHERE owner_sid =?";
+    private SidFactory sidFactory = new DefaultSidFactory();
 
     //~ Constructors ===================================================================================================
 
@@ -101,7 +103,7 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
 
         // Need to retrieve the current principal, in order to know who "owns" this ACL (can be changed later on)
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        PrincipalSid sid = new PrincipalSid(auth);
+        Sid sid = sidFactory.createPrincipal(auth);
 
         // Create the acl_object_identity row
         createObjectIdentity(objectIdentity, sid);
@@ -120,25 +122,25 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
      */
     protected void createEntries(final MutableAcl acl) {
         jdbcTemplate.batchUpdate(insertEntry,
-            new BatchPreparedStatementSetter() {
-                public int getBatchSize() {
-                    return acl.getEntries().size();
-                }
+                new BatchPreparedStatementSetter() {
+                    public int getBatchSize() {
+                        return acl.getEntries().size();
+                    }
 
-                public void setValues(PreparedStatement stmt, int i) throws SQLException {
-                    AccessControlEntry entry_ = acl.getEntries().get(i);
-                    Assert.isTrue(entry_ instanceof AccessControlEntryImpl, "Unknown ACE class");
-                    AccessControlEntryImpl entry = (AccessControlEntryImpl) entry_;
+                    public void setValues(PreparedStatement stmt, int i) throws SQLException {
+                        AccessControlEntry entry_ = acl.getEntries().get(i);
+                        Assert.isTrue(entry_ instanceof AccessControlEntryImpl, "Unknown ACE class");
+                        AccessControlEntryImpl entry = (AccessControlEntryImpl) entry_;
 
-                    stmt.setLong(1, ((Long) acl.getId()).longValue());
-                    stmt.setInt(2, i);
-                    stmt.setLong(3, createOrRetrieveSidPrimaryKey(entry.getSid(), true).longValue());
-                    stmt.setInt(4, entry.getPermission().getMask());
-                    stmt.setBoolean(5, entry.isGranting());
-                    stmt.setBoolean(6, entry.isAuditSuccess());
-                    stmt.setBoolean(7, entry.isAuditFailure());
-                }
-            });
+                        stmt.setLong(1, ((Long) acl.getId()).longValue());
+                        stmt.setInt(2, i);
+                        stmt.setLong(3, createOrRetrieveSidPrimaryKey(entry.getSid(), true).longValue());
+                        stmt.setInt(4, entry.getPermission().getMask());
+                        stmt.setBoolean(5, entry.isGranting());
+                        stmt.setBoolean(6, entry.isAuditSuccess());
+                        stmt.setBoolean(7, entry.isAuditFailure());
+                    }
+                });
     }
 
     /**
@@ -195,16 +197,8 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
         Assert.notNull(sid, "Sid required");
 
         String sidName;
-        boolean sidIsPrincipal = true;
-
-        if (sid instanceof PrincipalSid) {
-            sidName = ((PrincipalSid) sid).getPrincipal();
-        } else if (sid instanceof GrantedAuthoritySid) {
-            sidName = ((GrantedAuthoritySid) sid).getGrantedAuthority();
-            sidIsPrincipal = false;
-        } else {
-            throw new IllegalArgumentException("Unsupported implementation of Sid");
-        }
+        sidName = sid.getSidId();
+        boolean sidIsPrincipal = sid.isPrincipal();
 
         List<Long> sidIds = jdbcTemplate.queryForList(selectSidPrimaryKey,
                 new Object[] {Boolean.valueOf(sidIsPrincipal), sidName},  Long.class);
@@ -220,6 +214,40 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
         }
 
         return null;
+    }
+
+    /**
+     * Deletes all ACEs defined in the acl_entry table, wired with the presented SID, also wires owner_sid of OID
+     * belongs to SID to another SID, deletes given SID defined in acl_sid.
+     * @param sid to ACL delete
+     * @param sidHeir will became the owner of ObjectIdentities belongs to sid
+     */
+    public void deleteEntriesForSid(Sid sid, Sid sidHeir) {
+        String sidId = sid.getSidId();
+        long sidPK = findSidPK(sid);
+        long sidHeirPK = findSidPK(sidHeir);
+
+        deleteEntryBySidId(sidId);
+        changeObjectIdentityOwnerBySidFK(sidPK, sidHeirPK);
+        deleteSidByPK(sidPK);
+        aclCache.clearCache();
+    }
+
+    private void deleteEntryBySidId(String sidId){
+        jdbcTemplate.update(deleteEntryBySidForeignKey, sidId);
+    }
+
+    private void changeObjectIdentityOwnerBySidFK(long sidPK, long sidPKToSet){
+        jdbcTemplate.update(updateObjectIdentityOwnerBySid,sidPKToSet, sidPK);
+    }
+
+    private void deleteSidByPK(long sidPK) {
+        jdbcTemplate.update(deleteSidByPK, sidPK);
+    }
+
+    private long findSidPK(Sid sid) {
+        String sidField = sid.getSidId();
+        return jdbcTemplate.queryForLong(selectSidIdBySid, sidField);
     }
 
     public void deleteAcl(ObjectIdentity objectIdentity, boolean deleteChildren) throws ChildrenExistException {
@@ -344,7 +372,7 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
 
         if (acl.getParentAcl() != null) {
             Assert.isInstanceOf(ObjectIdentityImpl.class, acl.getParentAcl().getObjectIdentity(),
-                "Implementation only supports ObjectIdentityImpl");
+                    "Implementation only supports ObjectIdentityImpl");
 
             ObjectIdentityImpl oii = (ObjectIdentityImpl) acl.getParentAcl().getObjectIdentity();
             parentId = retrieveObjectIdentityPrimaryKey(oii);
@@ -429,5 +457,29 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
      */
     public void setForeignKeysInDatabase(boolean foreignKeysInDatabase) {
         this.foreignKeysInDatabase = foreignKeysInDatabase;
+    }
+
+    public void setSidFactory(SidFactory sidFactory) {
+        this.sidFactory = sidFactory;
+    }
+
+    public void setSelectSidPrimaryKey(String selectSidPrimaryKey) {
+        this.selectSidPrimaryKey = selectSidPrimaryKey;
+    }
+
+    public void setSelectSidIdBySid(String selectSidIdBySid) {
+        this.selectSidIdBySid = selectSidIdBySid;
+    }
+
+    public void setDeleteSidByPK(String deleteSidByPK) {
+        this.deleteSidByPK = deleteSidByPK;
+    }
+
+    public void setDeleteEntryBySidForeignKey(String deleteEntryBySidForeignKey) {
+        this.deleteEntryBySidForeignKey = deleteEntryBySidForeignKey;
+    }
+
+    public void setUpdateObjectIdentityOwnerBySid(String updateObjectIdentityOwnerBySid) {
+        this.updateObjectIdentityOwnerBySid = updateObjectIdentityOwnerBySid;
     }
 }
