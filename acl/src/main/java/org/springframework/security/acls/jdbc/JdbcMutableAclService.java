@@ -466,20 +466,4 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
     public void setSelectSidPrimaryKey(String selectSidPrimaryKey) {
         this.selectSidPrimaryKey = selectSidPrimaryKey;
     }
-
-    public void setSelectSidIdBySid(String selectSidIdBySid) {
-        this.selectSidIdBySid = selectSidIdBySid;
-    }
-
-    public void setDeleteSidByPK(String deleteSidByPK) {
-        this.deleteSidByPK = deleteSidByPK;
-    }
-
-    public void setDeleteEntryBySidForeignKey(String deleteEntryBySidForeignKey) {
-        this.deleteEntryBySidForeignKey = deleteEntryBySidForeignKey;
-    }
-
-    public void setUpdateObjectIdentityOwnerBySid(String updateObjectIdentityOwnerBySid) {
-        this.updateObjectIdentityOwnerBySid = updateObjectIdentityOwnerBySid;
-    }
 }
