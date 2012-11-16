@@ -71,8 +71,8 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
     private String updateObjectIdentity = "update acl_object_identity set "
             + "parent_object = ?, owner_sid = ?, entries_inheriting = ?" + " where id = ?";
     private String selectSidIdBySid = "select id from acl_sid where sid=?";
-    private String deleteSidByPK = "DELETE acl_sid WHERE id=?";
-    private String deleteEntryBySidForeignKey = "DELETE acl_entry ae WHERE ae.sid = as.id JOIN acl_sid as ON as.sid = ?";
+    private String deleteSidByPK = "DELETE sid.* FROM acl_sid sid WHERE sid.id=?";
+    private String deleteEntryBySidForeignKey = "DELETE FROM acl_entry USING acl_entry JOIN acl_sid ON acl_entry.sid = acl_sid.id WHERE acl_sid.sid = ?";
     private String updateObjectIdentityOwnerBySid = "UPDATE acl_object_identity SET owner_sid=?  WHERE owner_sid =?";
     private SidFactory sidFactory = new DefaultSidFactory();
 
@@ -207,21 +207,18 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
     }
 
     /**
-     * Deletes all ACEs defined in the acl_entry table, wired with the presented SID, also wires owner_sid of OID
-     * belongs to SID to another SID, deletes given SID defined in acl_sid.
-     *
-     * @param sid     to ACL delete
-     * @param sidHeir will became the owner of ObjectIdentities belongs to sid
+     * {@inheritDoc}
      */
     public void deleteEntriesForSid(Sid sid, Sid sidHeir) {
         String sidId = sid.getSidId();
         long sidPK = findSidPK(sid);
-        long sidHeirPK = findSidPK(sidHeir);
-
-        deleteEntryBySidId(sidId);
-        changeObjectIdentityOwnerBySidFK(sidPK, sidHeirPK);
-        deleteSidByPK(sidPK);
-        aclCache.clearCache();
+        if (sidPK != -1) {
+            long sidHeirPK = findSidPK(sidHeir);
+            deleteEntryBySidId(sidId);
+            changeObjectIdentityOwnerBySidFK(sidPK, sidHeirPK);
+            deleteSidByPK(sidPK);
+            aclCache.clearCache();
+        }
     }
 
     private void deleteEntryBySidId(String sidId) {
@@ -238,7 +235,12 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
 
     private long findSidPK(Sid sid) {
         String sidField = sid.getSidId();
-        return jdbcTemplate.queryForLong(selectSidIdBySid, sidField);
+        long result = -1;
+        try {
+            result = jdbcTemplate.queryForLong(selectSidIdBySid, sidField);
+        } catch (DataAccessException ignored) {
+        }
+        return result;
     }
 
     public void deleteAcl(ObjectIdentity objectIdentity, boolean deleteChildren) throws ChildrenExistException {

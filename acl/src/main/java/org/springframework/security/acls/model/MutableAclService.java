@@ -58,4 +58,12 @@ public interface MutableAclService extends AclService {
      *         keyword?)
      */
     MutableAcl updateAcl(MutableAcl acl) throws NotFoundException;
+    /**
+     * Deletes all ACEs defined in the acl_entry table, wired with the presented SID, also wires owner_sid of OID
+     * belongs to SID to another SID, deletes given SID defined in acl_sid.
+     *
+     * @param sid     to ACL delete
+     * @param sidHeir will became the owner of ObjectIdentities belongs to sid
+     */
+    void deleteEntriesForSid(Sid sid, Sid sidHeir);
 }
