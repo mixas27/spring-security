@@ -15,6 +15,7 @@
 package org.springframework.security.acls.jdbc;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.security.acls.domain.AccessControlEntryImpl;
 import org.springframework.security.acls.domain.DefaultSidFactory;
@@ -209,9 +210,15 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
     /**
      * {@inheritDoc}
      */
-    public void deleteEntriesForSid(Sid sid, Sid sidHeir) {
+    public void deleteEntriesForSid(Sid sid, Sid sidHeir) throws EmptyResultDataAccessException{
         String sidId = sid.getSidId();
-        long sidPK = findSidPK(sid);
+        long sidPK = -1;
+        try{
+            sidPK = findSidPK(sid);
+        }
+        catch (EmptyResultDataAccessException ignore){
+            //This exception raises when group has no sid, so we are just ignoring it, because nothing to clean.
+        }
         if (sidPK != -1) {
             long sidHeirPK = findSidPK(sidHeir);
             deleteEntryBySidId(sidId);
@@ -233,14 +240,9 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
         jdbcTemplate.update(deleteSidByPK, sidPK);
     }
 
-    private long findSidPK(Sid sid) {
+    private long findSidPK(Sid sid) throws DataAccessException{
         String sidField = sid.getSidId();
-        long result = -1;
-        try {
-            result = jdbcTemplate.queryForLong(selectSidIdBySid, sidField);
-        } catch (DataAccessException ignored) {
-        }
-        return result;
+        return  jdbcTemplate.queryForLong(selectSidIdBySid, sidField);
     }
 
     public void deleteAcl(ObjectIdentity objectIdentity, boolean deleteChildren) throws ChildrenExistException {
