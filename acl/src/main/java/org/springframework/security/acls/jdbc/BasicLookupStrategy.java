@@ -65,7 +65,7 @@ import org.springframework.util.Assert;
  *
  * @author Ben Alex
  */
-public final class BasicLookupStrategy implements LookupStrategy {
+public class BasicLookupStrategy implements LookupStrategy {
 
     public final static String DEFAULT_SELECT_CLAUSE = "select acl_object_identity.object_id_identity, "
         + "acl_entry.ace_order,  "
@@ -248,7 +248,7 @@ public final class BasicLookupStrategy implements LookupStrategy {
      *         should not throw {@link NotFoundException}, as a chain of {@link LookupStrategy}s may be used
      *         to automatically create entries if required)
      */
-    public Map<ObjectIdentity, Acl> readAclsById(List<ObjectIdentity> objects, List<Sid> sids) {
+    public final Map<ObjectIdentity, Acl> readAclsById(List<ObjectIdentity> objects, List<Sid> sids) {
         Assert.isTrue(batchSize >= 1, "BatchSize must be >= 1");
         Assert.notEmpty(objects, "Objects to lookup required");
 
@@ -421,16 +421,32 @@ public final class BasicLookupStrategy implements LookupStrategy {
     }
 
     /**
+     * Creates a particular implementation of {@link Sid} depending on the arguments.
+     *
+     * @param sid   the name of the sid representing its unique identifier. In typical ACL database schema it's
+     *                  located in table {@code acl_sid} table, {@code sid} column.
+     * @param isPrincipal whether it's a user or granted authority like role
+     * @return the instance of Sid with the {@code sidName} as an identifier
+     */
+    protected Sid createSid(boolean isPrincipal, String sid) {
+        if (isPrincipal) {
+            return new PrincipalSid(sid);
+        } else {
+            return new GrantedAuthoritySid(sid);
+        }
+    }
+
+    /**
      * Sets the {@code PermissionFactory} instance which will be used to convert loaded permission
      * data values to {@code Permission}s. A {@code DefaultPermissionFactory} will be used by default.
      *
      * @param permissionFactory
      */
-    public void setPermissionFactory(PermissionFactory permissionFactory) {
+    public final void setPermissionFactory(PermissionFactory permissionFactory) {
         this.permissionFactory = permissionFactory;
     }
 
-    public void setBatchSize(int batchSize) {
+    public final void setBatchSize(int batchSize) {
         this.batchSize = batchSize;
     }
 
@@ -440,28 +456,28 @@ public final class BasicLookupStrategy implements LookupStrategy {
      *
      * @param selectClause the select clause, which defaults to {@link #DEFAULT_SELECT_CLAUSE}.
      */
-    public void setSelectClause(String selectClause) {
+    public final void setSelectClause(String selectClause) {
         this.selectClause = selectClause;
     }
 
     /**
      * The SQL for the where clause used in the <tt>lookupPrimaryKey</tt> method.
      */
-    public void setLookupPrimaryKeysWhereClause(String lookupPrimaryKeysWhereClause) {
+    public final void setLookupPrimaryKeysWhereClause(String lookupPrimaryKeysWhereClause) {
         this.lookupPrimaryKeysWhereClause = lookupPrimaryKeysWhereClause;
     }
 
     /**
      * The SQL for the where clause used in the <tt>lookupObjectIdentities</tt> method.
      */
-    public void setLookupObjectIdentitiesWhereClause(String lookupObjectIdentitiesWhereClause) {
+    public final void setLookupObjectIdentitiesWhereClause(String lookupObjectIdentitiesWhereClause) {
         this.lookupObjectIdentitiesWhereClause = lookupObjectIdentitiesWhereClause;
     }
 
     /**
      * The SQL for the "order by" clause used in both queries.
      */
-    public void setOrderByClause(String orderByClause) {
+    public final void setOrderByClause(String orderByClause) {
         this.orderByClause = orderByClause;
     }
 
@@ -548,8 +564,7 @@ public final class BasicLookupStrategy implements LookupStrategy {
                 }
 
                 boolean entriesInheriting = rs.getBoolean("entries_inheriting");
-                Sid owner;
-                owner = sidFactory.create(rs.getString("acl_sid"), rs.getBoolean("acl_principal"));
+                Sid owner = createSid(rs.getBoolean("acl_principal"), rs.getString("acl_sid"));
                 acl = new AclImpl(objectIdentity, id, aclAuthorizationStrategy, grantingStrategy, parentAcl, null,
                         entriesInheriting, owner);
 
@@ -560,7 +575,9 @@ public final class BasicLookupStrategy implements LookupStrategy {
             // It is permissible to have no ACEs in an ACL (which is detected by a null ACE_SID)
             if (rs.getString("ace_sid") != null) {
                 Long aceId = new Long(rs.getLong("ace_id"));
-                Sid recipient = sidFactory.create(rs.getString("ace_sid"), rs.getBoolean("ace_principal"));
+
+                Sid recipient = createSid(rs.getBoolean("ace_principal"), rs.getString("ace_sid"));
+
                 int mask = rs.getInt("mask");
                 Permission permission = permissionFactory.buildFromMask(mask);
                 boolean granting = rs.getBoolean("granting");
