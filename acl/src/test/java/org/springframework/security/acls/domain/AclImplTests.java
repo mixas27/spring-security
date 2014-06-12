@@ -477,6 +477,11 @@ public class AclImplTests {
             return null;
         }
 
+        @Override
+        public void deleteEntriesForSid(Sid sid, Sid sidHeir) {
+
+        }
+
         public void deleteAcl(ObjectIdentity objectIdentity, boolean deleteChildren) throws ChildrenExistException {
         }
 
