@@ -32,7 +32,16 @@ import javax.sql.DataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementSetter;
 import org.springframework.jdbc.core.ResultSetExtractor;
-import org.springframework.security.acls.domain.*;
+import org.springframework.security.acls.domain.AccessControlEntryImpl;
+import org.springframework.security.acls.domain.AclAuthorizationStrategy;
+import org.springframework.security.acls.domain.AclImpl;
+import org.springframework.security.acls.domain.AuditLogger;
+import org.springframework.security.acls.domain.DefaultPermissionFactory;
+import org.springframework.security.acls.domain.DefaultPermissionGrantingStrategy;
+import org.springframework.security.acls.domain.GrantedAuthoritySid;
+import org.springframework.security.acls.domain.ObjectIdentityImpl;
+import org.springframework.security.acls.domain.PermissionFactory;
+import org.springframework.security.acls.domain.PrincipalSid;
 import org.springframework.security.acls.model.AccessControlEntry;
 import org.springframework.security.acls.model.Acl;
 import org.springframework.security.acls.model.AclCache;
@@ -113,7 +122,6 @@ public class BasicLookupStrategy implements LookupStrategy {
     private String lookupPrimaryKeysWhereClause = DEFAULT_LOOKUP_KEYS_WHERE_CLAUSE;
     private String lookupObjectIdentitiesWhereClause = DEFAULT_LOOKUP_IDENTITIES_WHERE_CLAUSE;
     private String orderByClause = DEFAULT_ORDER_BY_CLAUSE;
-    private SidFactory sidFactory = new DefaultSidFactory();
 
     //~ Constructors ===================================================================================================
 
@@ -596,10 +604,6 @@ public class BasicLookupStrategy implements LookupStrategy {
                 }
             }
         }
-    }
-
-    public void setSidFactory(SidFactory sidFactory) {
-        this.sidFactory = sidFactory;
     }
 
     private class StubAclParent implements Acl {

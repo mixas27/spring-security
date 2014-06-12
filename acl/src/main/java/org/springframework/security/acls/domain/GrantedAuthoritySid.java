@@ -54,38 +54,18 @@ public class GrantedAuthoritySid implements Sid {
         }
 
         // Delegate to getGrantedAuthority() to perform actual comparison (both should be identical)
-        return ((GrantedAuthoritySid) object).getSidId().equals(this.getSidId());
+        return ((GrantedAuthoritySid) object).getGrantedAuthority().equals(this.getGrantedAuthority());
     }
 
     public int hashCode() {
-        return this.getSidId().hashCode();
+        return this.getGrantedAuthority().hashCode();
     }
 
-    /**
-     * @deprecated use {@link #getSidId()} instead
-     */
-    @Deprecated
     public String getGrantedAuthority() {
         return grantedAuthority;
     }
 
     public String toString() {
         return "GrantedAuthoritySid[" + this.grantedAuthority + "]";
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public String getSidId() {
-        return grantedAuthority;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean isPrincipal() {
-        return false;
     }
 }

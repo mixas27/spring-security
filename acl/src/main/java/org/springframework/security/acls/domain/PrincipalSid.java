@@ -60,38 +60,18 @@ public class PrincipalSid implements Sid {
         }
 
         // Delegate to getPrincipal() to perform actual comparison (both should be identical)
-        return ((PrincipalSid) object).getSidId().equals(this.getSidId());
+        return ((PrincipalSid) object).getPrincipal().equals(this.getPrincipal());
     }
 
     public int hashCode() {
-        return this.getSidId().hashCode();
+        return this.getPrincipal().hashCode();
     }
 
-    /**
-     * @deprecated use {@link #getSidId()} instead.
-     */
-    @Deprecated
     public String getPrincipal() {
         return principal;
     }
 
     public String toString() {
         return "PrincipalSid[" + this.principal + "]";
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean isPrincipal() {
-        return true;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public String getSidId() {
-        return principal;
     }
 }

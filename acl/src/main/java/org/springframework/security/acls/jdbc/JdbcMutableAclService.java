@@ -18,10 +18,19 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.security.acls.domain.AccessControlEntryImpl;
-import org.springframework.security.acls.domain.DefaultSidFactory;
+import org.springframework.security.acls.domain.GrantedAuthoritySid;
 import org.springframework.security.acls.domain.ObjectIdentityImpl;
-import org.springframework.security.acls.domain.SidFactory;
-import org.springframework.security.acls.model.*;
+import org.springframework.security.acls.domain.PrincipalSid;
+import org.springframework.security.acls.model.AccessControlEntry;
+import org.springframework.security.acls.model.Acl;
+import org.springframework.security.acls.model.AclCache;
+import org.springframework.security.acls.model.AlreadyExistsException;
+import org.springframework.security.acls.model.ChildrenExistException;
+import org.springframework.security.acls.model.MutableAcl;
+import org.springframework.security.acls.model.MutableAclService;
+import org.springframework.security.acls.model.NotFoundException;
+import org.springframework.security.acls.model.ObjectIdentity;
+import org.springframework.security.acls.model.Sid;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -71,11 +80,9 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
     private String selectSidPrimaryKey = "select id from acl_sid where principal=? and sid=?";
     private String updateObjectIdentity = "update acl_object_identity set "
             + "parent_object = ?, owner_sid = ?, entries_inheriting = ?" + " where id = ?";
-    private String selectSidIdBySid = "select id from acl_sid where sid=?";
     private String deleteSidByPK = "DELETE sid.* FROM acl_sid sid WHERE sid.id=?";
     private String deleteEntryBySidForeignKey = "DELETE FROM acl_entry USING acl_entry JOIN acl_sid ON acl_entry.sid = acl_sid.id WHERE acl_sid.sid = ?";
     private String updateObjectIdentityOwnerBySid = "UPDATE acl_object_identity SET owner_sid=?  WHERE owner_sid =?";
-    private SidFactory sidFactory = new DefaultSidFactory();
 
     //~ Constructors ===================================================================================================
 
@@ -97,7 +104,7 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
 
         // Need to retrieve the current principal, in order to know who "owns" this ACL (can be changed later on)
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        Sid sid = sidFactory.createPrincipal(auth);
+        PrincipalSid sid = new PrincipalSid(auth);
 
         // Create the acl_object_identity row
         createObjectIdentity(objectIdentity, sid);
@@ -188,8 +195,16 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
         Assert.notNull(sid, "Sid required");
 
         String sidName;
-        sidName = sid.getSidId();
-        boolean sidIsPrincipal = sid.isPrincipal();
+        boolean sidIsPrincipal = true;
+
+        if (sid instanceof PrincipalSid) {
+            sidName = ((PrincipalSid) sid).getPrincipal();
+        } else if (sid instanceof GrantedAuthoritySid) {
+            sidName = ((GrantedAuthoritySid) sid).getGrantedAuthority();
+            sidIsPrincipal = false;
+        } else {
+            throw new IllegalArgumentException("Unsupported implementation of Sid");
+        }
 
         return createOrRetrieveSidPrimaryKey(sidName, sidIsPrincipal, allowCreate);
     }
@@ -222,17 +237,19 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
     /**
      * {@inheritDoc}
      */
-    public void deleteEntriesForSid(Sid sid, Sid sidHeir) throws EmptyResultDataAccessException{
-        String sidId = sid.getSidId();
-        long sidPK = -1;
-        try{
-            sidPK = findSidPK(sid);
+    public void deleteEntriesForSid(Sid sid, Sid sidHeir) throws EmptyResultDataAccessException {
+        String sidId;
+        if (sid instanceof PrincipalSid) {
+            sidId = ((PrincipalSid) sid).getPrincipal();
+        } else if (sid instanceof GrantedAuthoritySid) {
+            sidId = ((GrantedAuthoritySid) sid).getGrantedAuthority();
+        } else {
+            throw new IllegalArgumentException("Unsupported implementation of Sid");
         }
-        catch (EmptyResultDataAccessException ignore){
-            //This exception raises when group has no sid, so we are just ignoring it, because nothing to clean.
-        }
-        if (sidPK != -1) {
-            long sidHeirPK = findSidPK(sidHeir);
+        Long sidPK = createOrRetrieveSidPrimaryKey(sid, false);
+        Long sidHeirPK = createOrRetrieveSidPrimaryKey(sidHeir, false);
+
+        if (sidPK != null && sidHeirPK != null) {
             deleteEntryBySidId(sidId);
             changeObjectIdentityOwnerBySidFK(sidPK, sidHeirPK);
             deleteSidByPK(sidPK);
@@ -250,11 +267,6 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
 
     private void deleteSidByPK(long sidPK) {
         jdbcTemplate.update(deleteSidByPK, sidPK);
-    }
-
-    private long findSidPK(Sid sid) throws DataAccessException{
-        String sidField = sid.getSidId();
-        return  jdbcTemplate.queryForLong(selectSidIdBySid, sidField);
     }
 
     public void deleteAcl(ObjectIdentity objectIdentity, boolean deleteChildren) throws ChildrenExistException {
@@ -463,13 +475,4 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
     public void setForeignKeysInDatabase(boolean foreignKeysInDatabase) {
         this.foreignKeysInDatabase = foreignKeysInDatabase;
     }
-
-    public void setSidFactory(SidFactory sidFactory) {
-        this.sidFactory = sidFactory;
-    }
-
-    public void setSelectSidPrimaryKey(String selectSidPrimaryKey) {
-        this.selectSidPrimaryKey = selectSidPrimaryKey;
-    }
-
 }
