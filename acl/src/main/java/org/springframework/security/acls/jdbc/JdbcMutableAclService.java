@@ -238,14 +238,7 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
      * {@inheritDoc}
      */
     public void deleteEntriesForSid(Sid sid, Sid sidHeir) throws EmptyResultDataAccessException {
-        String sidId;
-        if (sid instanceof PrincipalSid) {
-            sidId = ((PrincipalSid) sid).getPrincipal();
-        } else if (sid instanceof GrantedAuthoritySid) {
-            sidId = ((GrantedAuthoritySid) sid).getGrantedAuthority();
-        } else {
-            throw new IllegalArgumentException("Unsupported implementation of Sid");
-        }
+        String sidId = getSidId(sid);
         Long sidPK = createOrRetrieveSidPrimaryKey(sid, false);
         Long sidHeirPK = createOrRetrieveSidPrimaryKey(sidHeir, false);
 
@@ -254,6 +247,16 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
             changeObjectIdentityOwnerBySidFK(sidPK, sidHeirPK);
             deleteSidByPK(sidPK);
             aclCache.clearCache();
+        }
+    }
+
+    protected String getSidId(Sid sid) {
+        if (sid instanceof PrincipalSid) {
+            return ((PrincipalSid) sid).getPrincipal();
+        } else if (sid instanceof GrantedAuthoritySid) {
+            return ((GrantedAuthoritySid) sid).getGrantedAuthority();
+        } else {
+            throw new IllegalArgumentException("Unsupported implementation of Sid");
         }
     }
 
