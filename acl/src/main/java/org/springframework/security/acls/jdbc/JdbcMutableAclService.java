@@ -217,7 +217,7 @@ public class JdbcMutableAclService extends JdbcAclService implements MutableAclS
      * @param allowCreate true if creation is permitted if not found
      * @return the primary key or null if not found
      */
-    protected final Long createOrRetrieveSidPrimaryKey(String sidName, boolean sidIsPrincipal, boolean allowCreate) {
+    protected Long createOrRetrieveSidPrimaryKey(String sidName, boolean sidIsPrincipal, boolean allowCreate) {
         List<Long> sidIds = jdbcTemplate.queryForList(selectSidPrimaryKey,
                 new Object[] {Boolean.valueOf(sidIsPrincipal), sidName},  Long.class);
 

@@ -23,6 +23,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.junit.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -43,6 +44,7 @@ import org.springframework.security.acls.model.NotFoundException;
 import org.springframework.security.acls.model.ObjectIdentity;
 import org.springframework.security.acls.model.Permission;
 import org.springframework.security.acls.model.Sid;
+import org.springframework.security.acls.sid.CustomSid;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -489,5 +491,47 @@ public class JdbcMutableAclServiceTests extends AbstractTransactionalJUnit4Sprin
 
        SecurityContextHolder.clearContext();
    }
+
+    /**
+     * This class needed to show how to extend {@link JdbcMutableAclService} for processing
+     * custom {@link Sid} implementations
+     */
+    private class CustomJdbcMutableAclService extends JdbcMutableAclService {
+
+        private CustomJdbcMutableAclService(DataSource dataSource, LookupStrategy lookupStrategy, AclCache aclCache) {
+            super(dataSource, lookupStrategy, aclCache);
+        }
+
+        @Override
+        protected Long createOrRetrieveSidPrimaryKey(Sid sid, boolean allowCreate) {
+            String sidName;
+            boolean isPrincipal = false;
+            if (sid instanceof CustomSid) {
+                sidName = ((CustomSid)sid).getSid();
+            } else if (sid instanceof GrantedAuthoritySid) {
+                sidName = ((GrantedAuthoritySid)sid).getGrantedAuthority();
+            } else {
+                sidName = ((PrincipalSid)sid).getPrincipal();
+                isPrincipal = true;
+            }
+            return createOrRetrieveSidPrimaryKey(sidName, isPrincipal, allowCreate);
+        }
+    }
+
+    @Test
+    public void testProcessingCustomSid() {
+        CustomJdbcMutableAclService customJdbcMutableAclService = Mockito.spy(new CustomJdbcMutableAclService(dataSource,
+                lookupStrategy, aclCache));
+        String sidName = "Custom sid";
+        boolean allowCreate = false;
+        CustomSid customSid = new CustomSid(sidName);
+        Long sidId = 1L;
+        Mockito.when(customJdbcMutableAclService.createOrRetrieveSidPrimaryKey(sidName, false, allowCreate))
+                .thenReturn(sidId);
+
+        Long result = customJdbcMutableAclService.createOrRetrieveSidPrimaryKey(customSid, allowCreate);
+
+        assertEquals(result, sidId);
+    }
 
 }
