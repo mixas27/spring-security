@@ -15,6 +15,7 @@
 package org.springframework.security.acls.jdbc;
 
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 import java.util.Arrays;
 import java.util.List;
@@ -23,7 +24,6 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.junit.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -492,6 +492,18 @@ public class JdbcMutableAclServiceTests extends AbstractTransactionalJUnit4Sprin
        SecurityContextHolder.clearContext();
    }
 
+    @Test
+    public void testProcessingCustomSid() {
+        CustomJdbcMutableAclService customJdbcMutableAclService = spy(new CustomJdbcMutableAclService(dataSource,
+                lookupStrategy, aclCache));
+        CustomSid customSid = new CustomSid("Custom sid");
+        when(customJdbcMutableAclService.createOrRetrieveSidPrimaryKey("Custom sid", false, false)).thenReturn(1L);
+
+        Long result = customJdbcMutableAclService.createOrRetrieveSidPrimaryKey(customSid, false);
+
+        assertEquals(result, new Long(1L));
+    }
+
     /**
      * This class needed to show how to extend {@link JdbcMutableAclService} for processing
      * custom {@link Sid} implementations
@@ -516,22 +528,6 @@ public class JdbcMutableAclServiceTests extends AbstractTransactionalJUnit4Sprin
             }
             return createOrRetrieveSidPrimaryKey(sidName, isPrincipal, allowCreate);
         }
-    }
-
-    @Test
-    public void testProcessingCustomSid() {
-        CustomJdbcMutableAclService customJdbcMutableAclService = Mockito.spy(new CustomJdbcMutableAclService(dataSource,
-                lookupStrategy, aclCache));
-        String sidName = "Custom sid";
-        boolean allowCreate = false;
-        CustomSid customSid = new CustomSid(sidName);
-        Long sidId = 1L;
-        Mockito.when(customJdbcMutableAclService.createOrRetrieveSidPrimaryKey(sidName, false, allowCreate))
-                .thenReturn(sidId);
-
-        Long result = customJdbcMutableAclService.createOrRetrieveSidPrimaryKey(customSid, allowCreate);
-
-        assertEquals(result, sidId);
     }
 
 }

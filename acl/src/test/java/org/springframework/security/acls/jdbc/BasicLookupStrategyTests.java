@@ -11,12 +11,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.security.acls.domain.*;
 import org.springframework.security.acls.model.*;
-import org.springframework.security.acls.sid.CustomSid;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.util.FileCopyUtils;
 
-import javax.sql.DataSource;
 import java.util.*;
 
 /**
@@ -292,20 +289,18 @@ public class BasicLookupStrategyTests {
 
     @Test
     public void testCreatePrincipalSid() {
-        String sid = "sid";
-        Sid result = strategy.createSid(true, sid);
+        Sid result = strategy.createSid(true, "sid");
 
         Assert.assertEquals(PrincipalSid.class, result.getClass());
-        Assert.assertEquals(sid, ((PrincipalSid)result).getPrincipal());
+        Assert.assertEquals("sid", ((PrincipalSid)result).getPrincipal());
     }
 
     @Test
     public void testCreateGrantedAuthority() {
-        String sid = "sid";
+        Sid result = strategy.createSid(false, "sid");
 
-        Sid result = strategy.createSid(false, sid);
         Assert.assertEquals(GrantedAuthoritySid.class, result.getClass());
-        Assert.assertEquals(sid, ((GrantedAuthoritySid)result).getGrantedAuthority());
+        Assert.assertEquals("sid", ((GrantedAuthoritySid)result).getGrantedAuthority());
     }
 
 }
